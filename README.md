@@ -1,112 +1,133 @@
-# Chaos-Dota
-Bot de Comparação de Estatísticas de Jogadores do Dota 2
+Dota 2 Player Statistics Comparison Bot
 
-Este é um bot que coleta e compara estatísticas de jogadores do Dota 2 usando dados da Steam. Ele identifica o persona name (nome no Dota 2) de um ou mais jogadores, coleta suas estatísticas e as compara para fornecer insights sobre o desempenho de cada um.
-Funcionalidades
+This is a Discord bot that collects and compares Dota 2 player statistics using the OpenDota API. It allows you to search for a player's persona name (in-game name), display their information, and compare statistics between two players.
+Features
 
-    Coleta de Dados da Steam:
+    Player Search:
 
-        O bot acessa a API da Steam para obter informações sobre os jogadores.
+        The bot searches for players by their persona name using the OpenDota API.
 
-        Identifica o persona name de cada jogador com base no ID da Steam.
+        Displays information such as persona name and Steam profile URL.
 
-    Comparação de Estatísticas:
+    Player Comparison:
 
-        Compara estatísticas como:
+        Compares two players, displaying their information side by side.
 
-            Taxa de vitórias (win rate).
+        Can be expanded in the future to include detailed statistics like win rate, KDA, etc.
 
-            Nível de habilidade (MMR).
+    Useful Commands:
 
-            Heróis mais jogados.
+        .ping: Checks the bot's latency.
 
-            KDA (Kills, Deaths, Assists).
+        .status: Checks if Dota 2 servers are online.
 
-            Partidas recentes.
+        .player <name>: Searches for a player by name and displays their information.
 
-        Gera um relatório comparativo entre dois ou mais jogadores.
+        .compare <player1> <player2>: Compares two players.
 
-    Saída de Dados:
+        .helpme: Displays a list of available commands.
 
-        Exibe os resultados em formato de texto ou tabela.
+How to Use
+Prerequisites
 
-        Pode ser integrado a um chat (ex: Discord, Telegram) para envio automático dos resultados.
+    Python 3.x: The bot is developed in Python.
 
-Como Usar
-Pré-requisitos
-
-    API Key da Steam: Você precisa de uma chave de API da Steam para acessar os dados. Obtenha uma aqui.
-
-    Python 3.x: O bot foi desenvolvido em Python.
-
-    Bibliotecas Necessárias:
+    Required Libraries:
     bash
     Copy
 
-    pip install requests
-    pip install pandas
+    pip install discord.py python-dotenv requests
 
-Configuração
+    Discord Bot Token: Create a bot on the Discord Developer Portal and obtain the token.
 
-    Clone o repositório:
+    OpenDota API: The bot uses the public OpenDota API, which does not require an authentication key.
+
+Setup
+
+    Clone the repository:
     bash
     Copy
 
-    git clone https://github.com/seu-usuario/nome-do-repositorio.git
+    git clone https://github.com/your-username/repository-name.git
 
-    Adicione sua API Key da Steam no arquivo de configuração:
-    python
+    Create a .env file in the root of the project and add the bot token:
+    env
     Copy
 
-    STEAM_API_KEY = "sua_api_key_aqui"
+    DISCORD_TOKEN=your_token_here
 
-    Execute o bot:
+    Run the bot:
     bash
     Copy
 
     python main.py
 
-Exemplo de Uso
-python
-Copy
+Bot Commands
 
-from bot import Dota2StatsBot
+    .ping: Checks the bot's latency.
+    Copy
 
-# IDs da Steam dos jogadores
-player1_id = "123456789"
-player2_id = "987654321"
+    .ping
 
-# Inicializa o bot
-bot = Dota2StatsBot(STEAM_API_KEY)
+    .status: Checks the status of Dota 2 servers.
+    Copy
 
-# Coleta e compara estatísticas
-comparison = bot.compare_players(player1_id, player2_id)
-print(comparison)
+    .status
 
-Estrutura do Projeto
+    .player <name>: Searches for a player by name.
+    Copy
+
+    .player "PlayerName"
+
+    .compare <player1> <player2>: Compares two players.
+    Copy
+
+    .compare "Player1" "Player2"
+
+    .helpme: Displays the list of available commands.
+    Copy
+
+    .helpme
+
+Project Structure
 Copy
 
 .
 ├── README.md
-├── main.py                # Script principal
-├── bot.py                 # Lógica do bot
-├── requirements.txt       # Dependências
-└── config.py              # Configurações (ex: API Key)
+├── main.py                # Main script
+├── .env                   # Configuration file (bot token)
+├── requirements.txt       # Dependencies
 
-Contribuição
+Example Usage
 
-Contribuições são bem-vindas! Siga os passos abaixo:
+    Add the bot to your Discord server.
 
-    Faça um fork do projeto.
+    Use the commands in the server chat:
 
-    Crie uma branch para sua feature (git checkout -b feature/nova-feature).
+        To search for a player:
+        Copy
 
-    Commit suas mudanças (git commit -m 'Adiciona nova feature').
+        .player "PlayerName"
 
-    Push para a branch (git push origin feature/nova-feature).
+        To compare two players:
+        Copy
 
-    Abra um Pull Request.
+        .compare "Player1" "Player2"
 
-Licença
+Contributing
 
-Este projeto está licenciado sob a MIT License. Veja o arquivo LICENSE para mais detalhes.
+Contributions are welcome! Follow these steps:
+
+    Fork the project.
+
+    Create a branch for your feature (git checkout -b feature/new-feature).
+
+    Commit your changes (git commit -m 'Add new feature').
+
+    Push to the branch (git push origin feature/new-feature).
+
+    Open a Pull Request.
+
+License
+
+This project is licensed under the MIT License. See the LICENSE file for details.
