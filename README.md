@@ -89,15 +89,6 @@ Bot Commands
 
     .helpme
 
-Project Structure
-Copy
-
-.
-├── README.md
-├── main.py                # Main script
-├── .env                   # Configuration file (bot token)
-├── requirements.txt       # Dependencies
-
 Example Usage
 
     Add the bot to your Discord server.
