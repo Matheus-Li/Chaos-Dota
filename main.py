@@ -19,7 +19,7 @@ class Player:
 
 @client.event
 async def on_ready():
-    print('Tá rodando.')
+    print('Works.')
     
 
 @client.command()
@@ -186,7 +186,7 @@ async def compare(ctx, *, query: str):
         await ctx.send("Por favor, digite dois nomes separados por espaço.")
         return
 
-    #Busca o primeiro jogador
+    #Search for the first player
     try:
         dets = {'q': parte1}
         endpoint = 'search/'
@@ -215,7 +215,7 @@ async def compare(ctx, *, query: str):
         await ctx.send("A API está indisponível para o jogador 1.")
         return
 
-    #Busca o segundo jogador
+    #Search for the second player
     try:
         dets2 = {'q': parte2}
         endpoint = 'search/'
@@ -225,18 +225,15 @@ async def compare(ctx, *, query: str):
             jResponse2 = response2.json()
             accId2 = jResponse2[0]["account_id"]
             response2 = requests.get(f'{dotaAPI}/players/{accId2}')
-
-            print("passou por aqui1")
-
+            
             if response2.status_code == 200:
-                print("passou por aqui2")
                 jResponse2 = response2.json()
                 profile2 = jResponse2.get('profile', {})
                 personaName2 = profile2.get('personaname', 'No name')
                 steamUrl2 = profile2.get('profileurl', 'No profile')
                 player2 = Player(personaName2, steamUrl2)
 
-                # Enviar mensagem com jogador 2
+                #Displays first and second player
                 message = (
                     f"**Jogador 1:** {player1.personaName}\n"
                     f"**Perfil:** {player1.steamUrl}\n\n"
@@ -257,5 +254,5 @@ async def compare(ctx, *, query: str):
 
 
 
-#Ponto de entrada
+#Entry point
 client.run('bot-discord-token-here')
