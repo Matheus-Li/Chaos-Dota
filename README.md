@@ -1,7 +1,7 @@
 Dota 2 Player Statistics Comparison Bot
 
 This is a Discord bot that collects and compares Dota 2 player statistics using the OpenDota API. It allows you to search for a player's persona name (in-game name), display their information, and compare statistics between two players.
-Features
+Features:
 
     Player Search:
 
