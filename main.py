@@ -1,258 +1,243 @@
-from dotenv import load_dotenv
-import discord as ds
-from discord.ext import commands
+from fileinput import filename
+
+from fastapi import FastAPI, HTTPException
+from lxml import html
+import json
 import requests
 import os
-from discord.ui import Select, View
-dotaAPI = 'https://api.opendota.com/api/'
+import re
 
-intents = ds.Intents.all() 
-client = commands.Bot(command_prefix = '.',intents=intents)
+app = FastAPI()
 
-class Player:
-    def __init__(self,steamUrl,personaName):
-          self.steamUrl = steamUrl
-          self.personaName = personaName
-
-    def player(self):
-         print(f"{self.personaName}")
-
-@client.event
-async def on_ready():
-    print('Works.')
-    
-
-@client.command()
-async def ping(ctx):
-    await ctx.send(f'Pong! {round(client.latency * 1000)} ms')
-
-@client.command()
-async def status(ctx):
-    endpoint = ('live')
+@app.get("/scrap_repo")
+async def scrap_repo(url: str):
+    responseJson = {}
     try:
-        response = requests.get(dotaAPI + endpoint)
-        if response.status_code == 200:
-            jResponse = response.json()
-            await ctx.send('Tá rolando')
-        else:
-            print('Error:',response.status_code)
-            await ctx.send('Não tá rolando')
+        # Faz a requisição HTTP
+        response = requests.get(url)
+        response.raise_for_status()  # Verifica se a requisição foi bem-sucedida
     except requests.exceptions.RequestException as e:
-        await ctx.send('Complicou')
+        raise HTTPException(status_code=400, detail=f"Erro ao acessar a URL: {e}")
 
-@client.command()
-async def helpme(ctx):
-    embed = ds.Embed(
-        title = 'Help comands:',
-        description = None,
-        colour = ds.Colour.blue()
+    tree = html.fromstring(response.content)
 
-    )
+    repoHash =  tree.xpath("//*[@id='repo-content-pjax-container']/div/div/div/div[1]/react-partial/div/div/div[4]/div[1]/table/tbody/tr[1]/td/div/div[2]/div[1]/span/a/text()")
+    if isinstance(repoHash, list) and len(repoHash) > 0:
+        repoHash = repoHash[0]  # Pegamos o primeiro item da lista
+    else:
+        repoHash = "default"  # Caso esteja vazio, usamos um nome padrão
 
-    embed.add_field(
-        name='.ping',
-        value='Sends a ping to check if the bot is operating',
-        inline=False,
-        )
-    embed.add_field(
-        name='.status',
-        value="Checks if Dota's server is up and running",
-        inline=False,
-    )
-    embed.add_field(
-        name='.player',
-        value='Type a player name to get their statistics',
-        inline=False,
-    )
-    embed.add_field(
-        name='.compare "<player1>" "<player2>"',
-        value='Type the name of two players separated by a space to compare their statistics',
-        inline=False,
-    )
-    await ctx.send(embed=embed)
+    repoHash = re.sub(r'[\\/:*?"<>|[\]]', '', repoHash)  # Sanitização
 
-@client.command()
-async def player(ctx, query: str=None):
-    if not query:
-        await ctx.send('It looks like you tried to use the ".player" command, for more info about how to use it type: ".helpme"')
-        return
+    urlDir = url.replace("https://github.com/", "")
+    urlDir = urlDir.split("/")
+    directory = urlDir[0] + "/" + urlDir[1]
 
-    dets = {'q' : query}
-    endpoint = ('search/')
-   
-    try:
-        response = requests.get(dotaAPI + endpoint, params=dets)
-        if response.status_code == 200:
-            jResponse = response.json()
+    # Nome do arquivo JSON
+    file_name = f"{repoHash}.json"
 
-            if isinstance(jResponse, list) and jResponse:
-                
-                nameCounts = {}
-                players = []
-                for playerDets in jResponse:
-                    personaName = playerDets.get('personaname', 'No name')
-                    accountId = str(playerDets.get('account_id')) 
+    # Caminho completo do arquivo
+    file_path = os.path.join(directory, file_name)
 
-                    nameCounts[personaName] = nameCounts.get(personaName, 0) + 1
-                    players.append((personaName, accountId))
+    if os.path.exists(file_path):
+        responseJson = json.load(file_path)
+        return responseJson
+    else:
+        # Parseia o conteúdo HTML com lxml
+        div_element = tree.xpath("(//div[@data-hpc='true'])[1]")
 
-                duplicates = {name: count for name, count in nameCounts.items() if count > 1}
+        if div_element:
+            # Buscar todas as <tr>, ignorando a primeira (usando posição > 1)
+            tr_list = div_element[0].xpath(".//tbody/tr[position() > 1 and position() < last()]")
 
-                if duplicates:
-                    
-                    duplicateFound = '\n'.join(
-                        [f"**{name}:** {count} players" for name, count in duplicates.items()]
-                    )
-                    await ctx.send(f'Found multiple players with the same persona name:\n{duplicateFound}')
+            # Iterar sobre cada <tr> (ignorando a primeira)
+            for tr in tr_list:
+                # Obter todas as <td> dentro da <tr>
+                td_list = tr.xpath("./td")
 
-                    
-                    players_to_display = players[:5]
+                # Procurar SVG e <a> dentro da <tr>
+                svg_class = tr.xpath(".//svg/@class")  # Classe do SVG
+                a_href = tr.xpath(".//a/@href")  # Link do <a>
 
-                    
-                    options = [ds.SelectOption(label=f"{personaName} - {accountId}", value=accountId) for personaName, accountId in players_to_display]
-                    select = Select(placeholder="Choose a player", options=options)
-
-                    
-                    view = View(timeout=60)
-                    view.add_item(select)
-
-                   
-                    await ctx.send("Please select a player from the list below:", view=view)
-
-                    
-                    interaction = await client.wait_for('interaction', check=lambda i: i.user == ctx.author and i.data['custom_id'] == select.custom_id)
-
-                    
-                    chosen_account_id = interaction.data['values'][0]
-
-                    
-                    player_details = next((player for player in players if player[1] == chosen_account_id), None)
-
-                    if player_details is None:
-                        await interaction.response.send_message('Selected player not found. Please try again.')
-                        return
-
-                    personaName, accountId = player_details
-
-                    
-                    endpoint = dotaAPI + 'players/'
-                    response = requests.get(endpoint + str(accountId))
-                    if response.status_code == 200:
-                        jResponse = response.json()
-                        profile = jResponse.get('profile', {})
-                        personaName = profile.get('personaname', 'No name')
-                        steamUrl = profile.get('profileurl', 'No profile')
-                        player1 = Player(personaName, steamUrl)
-                        message = (
-                            f'**Persona name:** {player1.personaName}\n'
-                            f'**Steam Url:** {player1.steamUrl}'
-                        )
-                        await ctx.send(message)
-                    else:
-                        await ctx.send('Error fetching player details.')
-
+                if a_href[0].startswith("http"):
+                    full_url = a_href[0]
                 else:
-                    
-                    accId = jResponse[0]["account_id"]
-                    endpoint = dotaAPI + 'players/'
-                    response = requests.get(endpoint + str(accId))
-                    if response.status_code == 200:
-                        jResponse = response.json()
-                        profile = jResponse.get('profile', {})
-                        personaName = profile.get('personaname', 'No name')
-                        steamUrl = profile.get('profileurl', 'No profile')
-                        player1 = Player(personaName, steamUrl)
-                        message = (
-                            f'**Persona name:** {player1.personaName}\n'
-                            f'**Steam Url:** {player1.steamUrl}'
-                        )
-                        await ctx.send(message)
+                    full_url = f"https://github.com{a_href[0]}"
 
-            else:
-                await ctx.send('No players found.')
+                if "icon-directory" in svg_class:
+                    print("opening directory: " + full_url)
+                    openPath(full_url, responseJson)
 
-        else:
-            await ctx.send('Sei quem é não')
+                elif "color-fg-muted" in svg_class:
+                    print("opening file: " + full_url)
+                    scrap_file(full_url, responseJson)
+                else:
+                    print("non valid type")
 
+        storeJsonData(directory, repoHash, responseJson)
+
+        return responseJson
+
+
+def openPath(url: str, responseJson):
+    try:
+        # Faz a requisição HTTP
+        response = requests.get(url)
+        response.raise_for_status()  # Verifica se a requisição foi bem-sucedida
     except requests.exceptions.RequestException as e:
-        await ctx.send('Gabe tá ocupado')
-        
-       
-@client.command()
-async def compare(ctx, *, query: str):
+        raise HTTPException(status_code=400, detail=f"Erro ao acessar a URL: {e}")
+
+    # Parseia o conteúdo HTML com lxml
+    tree = html.fromstring(response.content)
+
+    div_element = tree.xpath("//table[@aria-labelledby='folders-and-files']")
+    if div_element:
+        # Buscar todas as <tr>, ignorando a primeira (usando posição > 1)
+        tr_list = div_element[0].xpath(".//tbody/tr[position() > 1 and position() < last()]")
+
+        # Iterar sobre cada <tr> (ignorando a primeira)
+        for tr in tr_list:
+            # Obter todas as <td> dentro da <tr>
+            td_list = tr.xpath("./td")
+
+            # Procurar SVG e <a> dentro da <tr>
+            svg_class = tr.xpath(".//svg/@class")  # Classe do SVG
+            a_href = tr.xpath(".//a/@href")  # Link do <a>
+
+            full_url = f"https://github.com{a_href[0]}"
+
+            if "icon-directory" in svg_class:
+                print("opening directory: " + full_url)
+                openPath(full_url, responseJson)
+
+            elif "color-fg-muted" in svg_class:
+                print("opening file: " + full_url)
+                scrap_file(full_url,responseJson)
+            else:
+                print("non valid type: " + svg_class)
+
+def scrap_file(url: str, responseJson):
+    fileExtension = getExtension(url)
+
     try:
-        parte1, parte2 = query.split(" ")
-    except ValueError:
-        await ctx.send("Por favor, digite dois nomes separados por espaço.")
+        # Faz a requisição HTTP
+        response = requests.get(url)
+        response.raise_for_status()  # Verifica se a requisição foi bem-sucedida
+    except requests.exceptions.RequestException as e:
+        raise HTTPException(status_code=400, detail=f"Erro ao acessar a URL: {e}")
+
+        # Parseia o conteúdo HTML com lxml
+    tree = html.fromstring(response.content)
+
+
+    fileDetails = tree.xpath("//*[@id='repos-sticky-header']//*/div[contains(@class, 'text-mono')]/*/span/text()")
+    if len(fileDetails) == 0:
+        print("FAILED TO READ FILE: " + getFileName(url))
+        print("LAST ACCESSED URL: " + url)
+        # Convert the tree back to a string (HTML format)
+        html_string = html.tostring(tree, encoding="unicode")
         return
 
-    #Search for the first player
-    try:
-        dets = {'q': parte1}
-        endpoint = 'search/'
-        response = requests.get(dotaAPI + endpoint, params=dets)
+        # Save the HTML string to a file in the project root directory
+        with open("output.html", "w", encoding="utf-8") as f:
+            f.write(html_string)
 
-        if response.status_code == 200:
-            jResponse = response.json()
-            accId = jResponse[0]["account_id"]
-            response = requests.get(f'{dotaAPI}/players/{accId}')
 
-            if response.status_code == 200:
-                jResponse = response.json()
-                profile = jResponse.get('profile', {})
-                personaName = profile.get('personaname', 'No name')
-                steamUrl = profile.get('profileurl', 'No profile')
-                player1 = Player(personaName, steamUrl)
+    fileDetails = fileDetails[0]
+    #Gets the line count
+    lineCount = int(re.search(r'\d+', fileDetails).group())
+    #Extract the last number
+    size = int(re.findall(r'\d+', fileDetails)[-1])
+    #Extract the last word
+    unitSize= re.findall(r'\w+', fileDetails)[-1]
 
-                print("Jogador 1:", player1.personaName)
-            else:
-                await ctx.send(f"Não foi possível buscar o jogador: {parte1}")
-                return
+
+
+    if fileExtension in responseJson:
+        extension = responseJson[fileExtension]["extension"]
+        count = responseJson[fileExtension]["count"]
+        lines = responseJson[fileExtension]["lines"]
+        bytes = responseJson[fileExtension]["bytes"]
+
+        if unitSize.lower() == 'bytes':
+            bytes = bytes + size
+        elif unitSize.lower() == 'kb':
+            bytes = bytes + size * 1024
+        elif unitSize.lower() == 'mb':
+            bytes = bytes + size * 1024 * 1024
+        elif unitSize.lower() == 'gb':
+            bytes = bytes + size * 1024 * 1024 * 1024
+        elif unitSize.lower() == 'tb':
+            bytes = bytes + size * 1024 * 1024 * 1024 * 1024
         else:
-            await ctx.send(f"Não foi possível buscar o jogador: {parte1}")
+            print("FAILED TO READ FILE SIZE: " + getFileName(url))
+            print("LAST ACCESSED URL: " + url)
             return
-    except requests.exceptions.RequestException:
-        await ctx.send("A API está indisponível para o jogador 1.")
-        return
 
-    #Search for the second player
-    try:
-        dets2 = {'q': parte2}
-        endpoint = 'search/'
-        response2 = requests.get(dotaAPI + endpoint, params=dets2)
+        count = count + 1
+        lines = lines + lineCount
 
-        if response2.status_code == 200:
-            jResponse2 = response2.json()
-            accId2 = jResponse2[0]["account_id"]
-            response2 = requests.get(f'{dotaAPI}/players/{accId2}')
-            
-            if response2.status_code == 200:
-                jResponse2 = response2.json()
-                profile2 = jResponse2.get('profile', {})
-                personaName2 = profile2.get('personaname', 'No name')
-                steamUrl2 = profile2.get('profileurl', 'No profile')
-                player2 = Player(personaName2, steamUrl2)
+        responseJson[fileExtension]["extension"] = extension
+        responseJson[fileExtension]["count"] = count
+        responseJson[fileExtension]["lines"] = lines
+        responseJson[fileExtension]["bytes"] = bytes
 
-                #Displays first and second player
-                message = (
-                    f"**Jogador 1:** {player1.personaName}\n"
-                    f"**Perfil:** {player1.steamUrl}\n\n"
-                    f"**Jogador 2:** {player2.personaName}\n"
-                    f"**Perfil:** {player2.steamUrl}"
-                )
-                await ctx.send(message)
-            else:
-                await ctx.send(f"Não foi possível buscar o jogador: {parte2}")
+    else:
+        if unitSize.lower() == 'bytes':
+            bytes = size
+        elif unitSize.lower() == 'kb':
+            bytes = size * 1024
+        elif unitSize.lower() == 'mb':
+            bytes = size * 1024 * 1024
+        elif unitSize.lower() == 'gb':
+            bytes = size * 1024 * 1024 * 1024
+        elif unitSize.lower() == 'tb':
+            bytes = size * 1024 * 1024 * 1024 * 1024
         else:
-            await ctx.send(f"Não foi possível buscar o jogador: {parte2}")
-    except requests.exceptions.RequestException:
-        await ctx.send("A API está indisponível para o jogador 2.")
+            print("FAILED TO READ FILE SIZE: " + getFileName(url))
+            print("LAST ACCESSED URL: " + url)
+            return
+
+        jsonTypeObj = {"extension":fileExtension,"count":1, "lines":int(lineCount), "bytes":int(bytes)}
+        responseJson[fileExtension] = jsonTypeObj
+
+def getExtension(url: str) -> str:
+    filename = getFileName(url)
+    extension = "." + filename.split(".", 1)[-1]
+    print(extension)
+    return extension if len(extension) > 1 else "no extension"
+    # TODO
+    # VERIFICA A TERMINAÇÃO DO ARQUIVO, QUANTIDADE DE LINHAS E TAMANHO DO ARQUIVO
+    # CASO O TIPO DE ARQUIVO NÃO EXISTA DENTRO DO JSON, CRIAR UM NOVO INDICE DENTRO DO MESMO COM AS INFORMAÇÕES ADQUIRIDAS
+    # CASO EXISTA, SOMAR OS TOTAIS
+
+    # responseJson = {".py":{"extenssion":".py","count":10, "lines":4000, "bytes":65462},".js":{"extenssion":".js","count":10, "lines":4000, "bytes":65462}}
+
+def getFileName(url:str):
+    url = url.replace("https://github.com/", "")
+    url = url.replace(".github", "")
+    filename = url.split("/", 1)[-1]
+    return filename
+
+def storeJsonData(url, repoHash, jsonData):
+    print(f"URL: {url}")
+    # Diretório onde o arquivo será salvo (dentro do projeto)
+    url = url.replace("https://github.com/", "")
+    url = url.split("/")
+    directory = "repos/" + url[0] + "/" + url[1]
+
+    # Nome do arquivo JSON
+    file_name = f"{repoHash}.json"
+
+    # Caminho completo do arquivo
+    file_path = os.path.join(directory, file_name)
 
 
-     
+    # Criar o diretório se não existir
+    os.makedirs(directory, exist_ok=True)
 
+    # Escrever os dados no arquivo JSON
+    with open(file_path, "w", encoding="utf-8") as json_file:
+        json.dump(jsonData, json_file, indent=4, ensure_ascii=False)
 
-
-
-#Entry point
-client.run('bot-discord-token-here')
+    print(f"Arquivo JSON salvo em: {file_path}")
